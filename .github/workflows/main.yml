@@ -7,6 +7,9 @@ on:
       - main
       - master
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -55,9 +58,30 @@ jobs:
           echo "=== APK files ==="
           find app/build/outputs -type f -name "*.apk" -print
 
-      - name: Upload APK
+      # نسخة احتياطية داخل Actions Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: UgariticVision-debug-apk
           path: UgariticVision/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # إنشاء Release ورفع APK مباشرة
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "UgariticVision v1.0.${{ github.run_number }}"
+          body: |
+            UgariticVision Android APK
+
+            Build: ${{ github.run_number }}
+            Commit: ${{ github.sha }}
+
+            APK جاهز للتثبيت على Android.
+          files: |
+            UgariticVision/app/build/outputs/apk/debug/app-debug.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
