@@ -29,10 +29,10 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$cameraX")
     implementation("androidx.camera:camera-lifecycle:$cameraX")
     implementation("androidx.camera:camera-view:$cameraX")
-    implementation("org.tensorflow:tensorflow-lite:2.17.0")
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     // مكتبة الواجهات (مهمة جداً لملف التصميم)
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     
     // مكتبة مساعدة لـ TFLite (اختيارية لكنها تفيد جداً في معالجة الصور)
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 }
