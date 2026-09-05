@@ -1,22 +1,21 @@
-name: Build Android APK
-
-on:
-workflow_dispatch:
-
-push:
-branches:
-- main
-- master
-
-permissions:
-contents: write
-
-jobs:
-build:
-runs-on: ubuntu-latest
-
-```
-steps:
+    name: Build Android APK
+    
+    on:
+    workflow_dispatch:
+    
+    push:
+    branches:
+    - main
+    - master
+    
+    permissions:
+    contents: write
+    
+    jobs:
+    build:
+    runs-on: ubuntu-latest
+    
+    steps:
 
   # =========================
   # تحميل المشروع
@@ -154,4 +153,3 @@ steps:
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
