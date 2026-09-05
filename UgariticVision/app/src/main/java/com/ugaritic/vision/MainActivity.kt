@@ -21,7 +21,6 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
-import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -141,7 +140,6 @@ class MainActivity : AppCompatActivity() {
     private fun processImageProxy(imageProxy: ImageProxy) {
         val bitmap = imageProxy.toBitmap()
         if (bitmap != null) {
-            // تدوير الصورة إذا لزم الأمر لتكون بالاتجاه الصحيح
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val rotatedBitmap = if (rotationDegrees != 0) {
                 val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
@@ -154,7 +152,6 @@ class MainActivity : AppCompatActivity() {
         imageProxy.close()
     }
 
-    // دالة مساعدة لتحويل ImageProxy إلى Bitmap
     private fun ImageProxy.toBitmap(): Bitmap? {
         val yBuffer = planes[0].buffer
         val uBuffer = planes[1].buffer
@@ -196,15 +193,21 @@ class MainActivity : AppCompatActivity() {
             Letterbox.undo(detection, engineOutput.letterboxResult)
         }
 
-        // 4. رسم المربعات والرموز الأغاريتية على نسخة من الصورة الأصلية
+        // 4. استخراج النص الأغاريتي المرتب باستخدام UgariticTextExtractor
+        val extractedText = UgariticTextExtractor.extract(finalDetections)
+
+        // 5. رسم المربعات والرموز الأغاريتية على الصورة
         val annotatedBitmap = drawDetectionsOnBitmap(bitmap, finalDetections)
 
         runOnUiThread {
             mainImageView.setImageBitmap(annotatedBitmap)
+            // تحديث النص المستخرج في شريط الحالة
+            if (extractedText.isNotBlank()) {
+                statusLabel.text = "النص: $extractedText"
+            }
         }
     }
 
-    // دالة رسم المربعات والحروف على الصورة
     private fun drawDetectionsOnBitmap(source: Bitmap, detections: List<Detection>): Bitmap {
         val mutableBitmap = source.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(mutableBitmap)
@@ -222,12 +225,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         for (det in detections) {
-            // رسم المربع إذا كان مفَعلاً
             if (showBoxes) {
                 canvas.drawRect(det.x1, det.y1, det.x2, det.y2, boxPaint)
             }
 
-            // تجهيز النص (الحرف الأغاريتي + نسبة الثقة)
             val charStr = if (det.classId in Constants.UGARITIC_CHARS.indices) {
                 Constants.UGARITIC_CHARS[det.classId]
             } else {
