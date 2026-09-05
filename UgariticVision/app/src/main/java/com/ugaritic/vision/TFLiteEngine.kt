@@ -4,20 +4,22 @@ import android.content.Context
 import android.graphics.Bitmap
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import java.io.FileInputStream
+import java.nio.channels.FileChannel
 
 class TFLiteEngine(context: Context) : AutoCloseable {
     private val interpreter: Interpreter
 
     init {
-        val bytes = context.assets.open(Constants.MODEL_FILE).use { it.readBytes() }
-        interpreter = Interpreter(
-            ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply {
-                put(bytes)
-                rewind()
-            }
-        )
+        // الطريقة الآمنة والصحيحة 100% لتحميل نموذج TFLite لمنع الانهيار (Crash)
+        val fileDescriptor = context.assets.openFd(Constants.MODEL_FILE)
+        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
+        val fileChannel = inputStream.channel
+        val startOffset = fileDescriptor.startOffset
+        val declaredLength = fileDescriptor.declaredLength
+        val mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+        
+        interpreter = Interpreter(mappedByteBuffer)
     }
 
     // نحتفظ بـ LetterboxResult مع المخرجات لنتمكن من عكس الإحداثيات بدقة لاحقاً
