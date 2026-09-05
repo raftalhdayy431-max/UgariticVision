@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0A0D14"> <!-- لون الخلفية الداكن من Kivy -->
+    android:background="#0A0D14">
 
     <!-- الشريط العلوي (Header) -->
     <LinearLayout
