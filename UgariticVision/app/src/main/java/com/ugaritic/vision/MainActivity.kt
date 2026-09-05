@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var mainImageView: ImageView
     private lateinit var statusLabel: TextView
-    private lateinit var tfLiteEngine: TFLiteEngine 
+    private lateinit var tfLiteEngine: TFLiteEngine
     
     private lateinit var cameraExecutor: ExecutorService
     private var isLiveCamera = true
