@@ -45,7 +45,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         supportActionBar?.hide()
 
-        // ربط العناصر
+        // ربط عناصر واجهة المستخدم
         mainImageView = findViewById(R.id.mainImageView)
         statusLabel = findViewById(R.id.statusLabel)
         val btnAnalyze = findViewById<Button>(R.id.btnAnalyze)
@@ -58,29 +58,35 @@ class MainActivity : AppCompatActivity() {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // التهيئة الآمنة للموديل لمنع الخروج المفاجئ وإظهار السبب الحقيقي إن وجد
+        // تهيئة محرك الذكاء الاصطناعي بشكل آمن
         try {
             tfLiteEngine = TFLiteEngine(this)
         } catch (e: Exception) {
-            Toast.makeText(this, "خطأ في تهيئة الموديل: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-            statusLabel.text = "فشل تحميل الموديل!"
-            statusLabel.setTextColor(Color.RED)
+            Toast.makeText(this, "خطأ في تحميل الموديل: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         }
 
-        // أحداث الفلاتر
-        chipBoxes.setOnCheckedChangeListener { _, isChecked -> showBoxes = isChecked; reanalyzeFrozen() }
-        chipConf.setOnCheckedChangeListener { _, isChecked -> showConfidence = isChecked; reanalyzeFrozen() }
-        chipChars.setOnCheckedChangeListener { _, isChecked -> showLabels = isChecked; reanalyzeFrozen() }
+        // إعداد مستمعي الفلاتر لإعادة التحليل الفوري دون تعليق
+        val filterListener = CheckBox.OnCheckedChangeListener { _, _ ->
+            showBoxes = chipBoxes.isChecked
+            showConfidence = chipConf.isChecked
+            showLabels = chipChars.isChecked
+            reanalyzeFrozen()
+        }
 
-        // أحداث الأزرار
+        chipBoxes.setOnCheckedChangeListener(filterListener)
+        chipConf.setOnCheckedChangeListener(filterListener)
+        chipChars.setOnCheckedChangeListener(filterListener)
+
+        // زر التجميد / التحليل
         btnAnalyze.setOnClickListener {
             isLiveCamera = false
             frozenBitmap = currentBitmap
             statusLabel.text = "ANALYZED FRAME"
             statusLabel.setTextColor(Color.parseColor("#FF9919"))
-            Toast.makeText(this, "Frame captured & analyzed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "تم تجميد الإطار وتحليله", Toast.LENGTH_SHORT).show()
         }
 
+        // زر العودة للكاميرا الحية
         btnLiveCamera.setOnClickListener {
             isLiveCamera = true
             statusLabel.text = "LIVE CAMERA"
@@ -88,11 +94,12 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
 
+        // زر فتح المعرض
         btnGallery.setOnClickListener {
             galleryLauncher.launch("image/*")
         }
 
-        // طلب صلاحيات الكاميرا
+        // فحص صلاحية الكاميرا والبدء
         if (allPermissionsGranted()) {
             startCamera()
         } else {
@@ -104,45 +111,54 @@ class MainActivity : AppCompatActivity() {
         if (permissions[Manifest.permission.CAMERA] == true) {
             startCamera()
         } else {
-            Toast.makeText(this, "Permission not granted.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "يجب منح صلاحية الكاميرا لتشغيل التطبيق", Toast.LENGTH_SHORT).show()
         }
     }
 
     private val galleryLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
-            isLiveCamera = false
-            statusLabel.text = "STATIC IMAGE"
-            statusLabel.setTextColor(Color.parseColor("#19CC66"))
-            val inputStream = contentResolver.openInputStream(it)
-            val bitmap = BitmapFactory.decodeStream(inputStream)
-            frozenBitmap = bitmap
-            currentBitmap = bitmap
-            processAndDisplayImage(bitmap)
+            try {
+                isLiveCamera = false
+                statusLabel.text = "STATIC IMAGE"
+                statusLabel.setTextColor(Color.parseColor("#19CC66"))
+                val inputStream = contentResolver.openInputStream(it)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+                if (bitmap != null) {
+                    frozenBitmap = bitmap
+                    currentBitmap = bitmap
+                    processAndDisplayImage(bitmap)
+                } else {
+                    Toast.makeText(this, "تعذر قراءة الصورة من المعرض", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this, "خطأ في المعرض: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
-            val imageAnalyzer = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-                .also {
-                    it.setAnalyzer(cameraExecutor) { imageProxy ->
-                        if (isLiveCamera) {
-                            processImageProxy(imageProxy)
-                        } else {
-                            imageProxy.close()
+            try {
+                val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+                val imageAnalyzer = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                    .also {
+                        it.setAnalyzer(cameraExecutor) { imageProxy ->
+                            if (isLiveCamera) {
+                                processImageProxy(imageProxy)
+                            } else {
+                                imageProxy.close()
+                            }
                         }
                     }
-                }
 
-            try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, imageAnalyzer)
             } catch (exc: Exception) {
-                // خطأ كاميرا صامت
+                Toast.makeText(this, "خطأ في تشغيل الكاميرا: ${exc.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -189,10 +205,8 @@ class MainActivity : AppCompatActivity() {
         currentBitmap = bitmap
 
         try {
-            // 1. تشغيل نموذج TFLite والحصول على النتائج
             val engineOutput = tfLiteEngine!!.run(bitmap)
 
-            // 2. فك التشفير واستخراج المربعات والحروف
             val rawDetections = YoloPostProcessor.decode(
                 data = engineOutput.data,
                 shape = engineOutput.shape,
@@ -201,15 +215,11 @@ class MainActivity : AppCompatActivity() {
                 maxDet = 100
             )
 
-            // 3. إعادة الإحداثيات لمقاس الصورة الأصلي
             val finalDetections = rawDetections.map { detection ->
                 Letterbox.undo(detection, engineOutput.letterboxResult)
             }
 
-            // 4. استخراج النص الأغاريتي
             val extractedText = UgariticTextExtractor.extract(finalDetections)
-
-            // 5. رسم المربعات والرموز
             val annotatedBitmap = drawDetectionsOnBitmap(bitmap, finalDetections)
 
             runOnUiThread {
@@ -265,7 +275,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun reanalyzeFrozen() {
         if (!isLiveCamera && frozenBitmap != null) {
-            processAndDisplayImage(frozenBitmap)
+            cameraExecutor.execute {
+                processAndDisplayImage(frozenBitmap)
+            }
         }
     }
 
