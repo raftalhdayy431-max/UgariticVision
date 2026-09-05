@@ -7,7 +7,6 @@ android {
     namespace = "com.ugaritic.vision"
     compileSdk = 36
 
-    // الحل الجذري لمشكلة دمج المكتبات الأصلية عبر تعطيل الانضغاط أو استخدام التوافقية
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -37,7 +36,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // الطريقة الحديثة لتحديد إصدار الجافا في كوتلن لمنع التحذيرات
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -69,9 +67,9 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraX")
 
     // =========================
-    // TensorFlow Lite
+    // TensorFlow Lite (محدث لتوافق تام مع Gradle 8.13)
     // =========================
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // =========================
