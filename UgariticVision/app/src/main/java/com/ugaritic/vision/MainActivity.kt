@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
     private var isLiveCamera = true
     private var frozenBitmap: Bitmap? = null
+    private var currentBitmap: Bitmap? = null // لحفظ آخر إطار قادم من الكاميرا
 
     // متغيرات الفلاتر
     private var showBoxes = true
@@ -67,15 +68,17 @@ class MainActivity : AppCompatActivity() {
         // أحداث الأزرار
         btnAnalyze.setOnClickListener {
             isLiveCamera = false
+            // تجميد الإطار الحالي وتخزينه ليعمل مع الفلاتر وإعادة التحليل
+            frozenBitmap = currentBitmap
             statusLabel.text = "ANALYZED FRAME"
-            statusLabel.setTextColor(android.graphics.Color.parseColor("#FF9919"))
+            statusLabel.setTextColor(Color.parseColor("#FF9919"))
             Toast.makeText(this, "Frame captured & analyzed", Toast.LENGTH_SHORT).show()
         }
 
         btnLiveCamera.setOnClickListener {
             isLiveCamera = true
             statusLabel.text = "LIVE CAMERA"
-            statusLabel.setTextColor(android.graphics.Color.parseColor("#00B4D8"))
+            statusLabel.setTextColor(Color.parseColor("#00B4D8"))
             startCamera()
         }
 
@@ -103,10 +106,11 @@ class MainActivity : AppCompatActivity() {
         uri?.let {
             isLiveCamera = false
             statusLabel.text = "STATIC IMAGE"
-            statusLabel.setTextColor(android.graphics.Color.parseColor("#19CC66"))
+            statusLabel.setTextColor(Color.parseColor("#19CC66"))
             val inputStream = contentResolver.openInputStream(it)
             val bitmap = BitmapFactory.decodeStream(inputStream)
             frozenBitmap = bitmap
+            currentBitmap = bitmap
             processAndDisplayImage(bitmap)
         }
     }
@@ -175,6 +179,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun processAndDisplayImage(bitmap: Bitmap?) {
         if (bitmap == null) return
+        
+        // حفظ الإطار الحالي للاستفادة منه عند الضغط على زر التحليل أو الفلاتر
+        currentBitmap = bitmap
 
         // 1. تشغيل نموذج TFLite والحصول على النتائج و LetterboxResult
         val engineOutput = tfLiteEngine.run(bitmap)
@@ -188,7 +195,7 @@ class MainActivity : AppCompatActivity() {
             maxDet = 100
         )
 
-        // 3. إعادة الإحداثيات لمقاس الصورة الأصلي بدقة مطابقة لـ Kivy
+        // 3. إعادة الإحداثيات لمقاس الصورة الأصلي بدقة مطابقة
         val finalDetections = rawDetections.map { detection ->
             Letterbox.undo(detection, engineOutput.letterboxResult)
         }
