@@ -7,12 +7,6 @@ android {
     namespace = "com.ugaritic.vision"
     compileSdk = 36
 
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
-
     defaultConfig {
         applicationId = "com.ugaritic.vision"
         minSdk = 24
@@ -67,10 +61,9 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraX")
 
     // =========================
-    // TensorFlow Lite (محدث لتوافق تام مع Gradle 8.13)
+    // TensorFlow Lite (النواة الأساسية فقط بدون مشاكل التعارض)
     // =========================
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // =========================
     // ConstraintLayout
