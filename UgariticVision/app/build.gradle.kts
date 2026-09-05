@@ -7,7 +7,7 @@ android {
     namespace = "com.ugaritic.vision"
     compileSdk = 36
 
-    // حل مشكلة دمج المكتبات الأصلية الخاصة بالذكاء الاصطناعي
+    // الحل الجذري لمشكلة دمج المكتبات الأصلية عبر تعطيل الانضغاط أو استخدام التوافقية
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -26,9 +26,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(
-                getDefaultProguardFile(
-                    "proguard-android-optimize.txt"
-                ),
+                getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
@@ -39,8 +37,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    // الطريقة الحديثة لتحديد إصدار الجافا في كوتلن لمنع التحذيرات
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     androidResources {
