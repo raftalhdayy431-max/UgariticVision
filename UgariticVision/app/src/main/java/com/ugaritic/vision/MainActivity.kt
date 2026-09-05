@@ -4,6 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
 import android.os.Bundle
 import android.widget.Button
 import android.widget.CheckBox
@@ -17,6 +21,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -24,7 +29,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var mainImageView: ImageView
     private lateinit var statusLabel: TextView
-    private lateinit var tfLiteEngine: TFLiteEngine // الكلاس الموجود لديك مسبقاً
+    private lateinit var tfLiteEngine: TFLiteEngine 
     
     private lateinit var cameraExecutor: ExecutorService
     private var isLiveCamera = true
@@ -133,30 +138,113 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     private fun processImageProxy(imageProxy: ImageProxy) {
-        val mediaImage = imageProxy.image
-        if (mediaImage != null) {
-            // تحويل ImageProxy إلى Bitmap (يجب استخدام دالة مساعدة هنا)
-            // val bitmap = mediaImage.toBitmap() // افتراض وجود دالة التحويل
-            
-            // محاكاة للمعالجة للتبسيط في هذا الكود:
-            // frozenBitmap = bitmap
-            // processAndDisplayImage(bitmap)
+        val bitmap = imageProxy.toBitmap()
+        if (bitmap != null) {
+            // تدوير الصورة إذا لزم الأمر لتكون بالاتجاه الصحيح
+            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            val rotatedBitmap = if (rotationDegrees != 0) {
+                val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            } else {
+                bitmap
+            }
+            processAndDisplayImage(rotatedBitmap)
         }
         imageProxy.close()
     }
 
+    // دالة مساعدة لتحويل ImageProxy إلى Bitmap
+    private fun ImageProxy.toBitmap(): Bitmap? {
+        val yBuffer = planes[0].buffer
+        val uBuffer = planes[1].buffer
+        val vBuffer = planes[2].buffer
+
+        val ySize = yBuffer.remaining()
+        val uSize = uBuffer.remaining()
+        val vSize = vBuffer.remaining()
+
+        val nv21 = ByteArray(ySize + uSize + vSize)
+        yBuffer.get(nv21, 0, ySize)
+        vBuffer.get(nv21, ySize, vSize)
+        uBuffer.get(nv21, ySize + vSize, uSize)
+
+        val yuvImage = android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, width, height, null)
+        val out = java.io.ByteArrayOutputStream()
+        yuvImage.compressToJpeg(android.graphics.Rect(0, 0, width, height), 90, out)
+        val imageBytes = out.toByteArray()
+        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+    }
+
     private fun processAndDisplayImage(bitmap: Bitmap?) {
         if (bitmap == null) return
-        
-        // هنا يتم استدعاء كلاس الـ Yolo و الـ TextExtractor الخاص بك
-        // val annotatedBitmap = tfLiteEngine.detectAndDraw(bitmap, showBoxes, showConfidence, showLabels)
-        
-        runOnUiThread {
-            // mainImageView.setImageBitmap(annotatedBitmap)
-            mainImageView.setImageBitmap(bitmap) // مؤقتاً لعرض الصورة
+
+        // 1. تشغيل نموذج TFLite والحصول على النتائج و LetterboxResult
+        val engineOutput = tfLiteEngine.run(bitmap)
+
+        // 2. فك التشفير واستخراج المربعات والحروف الأغاريتية
+        val rawDetections = YoloPostProcessor.decode(
+            data = engineOutput.data,
+            shape = engineOutput.shape,
+            conf = 0.4f,
+            iou = 0.5f,
+            maxDet = 100
+        )
+
+        // 3. إعادة الإحداثيات لمقاس الصورة الأصلي بدقة مطابقة لـ Kivy
+        val finalDetections = rawDetections.map { detection ->
+            Letterbox.undo(detection, engineOutput.letterboxResult)
         }
+
+        // 4. رسم المربعات والرموز الأغاريتية على نسخة من الصورة الأصلية
+        val annotatedBitmap = drawDetectionsOnBitmap(bitmap, finalDetections)
+
+        runOnUiThread {
+            mainImageView.setImageBitmap(annotatedBitmap)
+        }
+    }
+
+    // دالة رسم المربعات والحروف على الصورة
+    private fun drawDetectionsOnBitmap(source: Bitmap, detections: List<Detection>): Bitmap {
+        val mutableBitmap = source.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        
+        val boxPaint = Paint().apply {
+            color = Color.GREEN
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+        }
+
+        val textPaint = Paint().apply {
+            color = Color.RED
+            textSize = 36f
+            isAntiAlias = true
+        }
+
+        for (det in detections) {
+            // رسم المربع إذا كان مفَعلاً
+            if (showBoxes) {
+                canvas.drawRect(det.x1, det.y1, det.x2, det.y2, boxPaint)
+            }
+
+            // تجهيز النص (الحرف الأغاريتي + نسبة الثقة)
+            val charStr = if (det.classId in Constants.UGARITIC_CHARS.indices) {
+                Constants.UGARITIC_CHARS[det.classId]
+            } else {
+                "?"
+            }
+
+            val displayText = buildString {
+                if (showLabels) append("$charStr ")
+                if (showConfidence) append(String.format("%.2f", det.confidence))
+            }
+
+            if (displayText.isNotEmpty()) {
+                canvas.drawText(displayText, det.x1, maxOf(det.y1 - 10f, 30f), textPaint)
+            }
+        }
+
+        return mutableBitmap
     }
 
     private fun reanalyzeFrozen() {
@@ -170,5 +258,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
+        tfLiteEngine.close()
     }
 }
