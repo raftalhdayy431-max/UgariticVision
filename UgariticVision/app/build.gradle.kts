@@ -33,6 +33,6 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     // مكتبة الواجهات (مهمة جداً لملف التصميم)
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
-    
+    implementation("androidx.camera:camera-core:$cameraX")
     // مكتبة مساعدة لـ TFLite (اختيارية لكنها تفيد جداً في معالجة الصور)
 }
