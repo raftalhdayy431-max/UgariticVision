@@ -7,6 +7,13 @@ android {
     namespace = "com.ugaritic.vision"
     compileSdk = 36
 
+    // أضف هذا الجزء هنا لتجاوز مشكلة دمج المكتبات الأصلية
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     defaultConfig {
         applicationId = "com.ugaritic.vision"
         minSdk = 24
@@ -19,7 +26,9 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
+                getDefaultProguardFile(
+                    "proguard-android-optimize.txt"
+                ),
                 "proguard-rules.pro"
             )
         }
@@ -30,10 +39,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
+    kotlinOptions {
+        jvmTarget = "17"
     }
 
     androidResources {
@@ -61,9 +68,10 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraX")
 
     // =========================
-    // TensorFlow Lite (النواة الأساسية فقط بدون مشاكل التعارض)
+    // TensorFlow Lite
     // =========================
-    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // =========================
     // ConstraintLayout
