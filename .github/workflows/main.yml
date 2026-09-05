@@ -1,155 +1,87 @@
-    name: Build Android APK
-    
-    on:
-    workflow_dispatch:
-    
-    push:
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
     branches:
-    - main
-    - master
-    
-    permissions:
-    contents: write
-    
-    jobs:
-    build:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  build:
     runs-on: ubuntu-latest
-    
+
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  # =========================
-  # تحميل المشروع
-  # =========================
-  - name: Checkout
-    uses: actions/checkout@v4
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-  # =========================
-  # Java 17
-  # =========================
-  - name: Setup JDK 17
-    uses: actions/setup-java@v5
-    with:
-      distribution: temurin
-      java-version: "17"
-      cache: gradle
+      - name: Install Android SDK
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
 
-  # =========================
-  # Android SDK
-  # =========================
-  - name: Setup Android SDK
-    uses: android-actions/setup-android@v3
+      - name: Check project structure
+        working-directory: UgariticVision
+        run: |
+          echo "=== Project root ==="
+          pwd
+          echo "=== Project files ==="
+          ls -la
+          echo "=== App directory ==="
+          ls -la app
 
+      - name: Build Debug APK
+        working-directory: UgariticVision
+        run: |
+          gradle assembleDebug --stacktrace
 
-  # =========================
-  # تثبيت SDK المطلوب
-  # =========================
-  - name: Install Android SDK Packages
-    run: |
-      sdkmanager --install \
-        "platforms;android-36" \
-        "build-tools;36.0.0"
+      - name: Verify APK
+        working-directory: UgariticVision
+        run: |
+          echo "=== APK files ==="
+          find app/build/outputs -type f -name "*.apk" -print
 
+      # نسخة احتياطية داخل Actions Artifacts
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UgariticVision-debug-apk
+          path: UgariticVision/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
 
-  # =========================
-  # فحص هيكل المشروع
-  # =========================
-  - name: Check Project Structure
-    working-directory: UgariticVision
-    run: |
-      echo "=== Current Directory ==="
-      pwd
+      # إنشاء Release ورفع APK مباشرة
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "UgariticVision v1.0.${{ github.run_number }}"
+          body: |
+            UgariticVision Android APK
 
-      echo "=== Project Files ==="
-      ls -la
+            Build: ${{ github.run_number }}
+            Commit: ${{ github.sha }}
 
-      echo "=== App Directory ==="
-      ls -la app
-
-      echo "=== Gradle Wrapper ==="
-      ls -la gradlew
-
-
-  # =========================
-  # إعطاء صلاحية تنفيذ Gradle Wrapper
-  # =========================
-  - name: Make Gradle Wrapper Executable
-    working-directory: UgariticVision
-    run: chmod +x gradlew
-
-
-  # =========================
-  # عرض نسخة Gradle
-  # =========================
-  - name: Check Gradle Version
-    working-directory: UgariticVision
-    run: ./gradlew --version
-
-
-  # =========================
-  # تنظيف المشروع
-  # =========================
-  - name: Clean Project
-    working-directory: UgariticVision
-    run: ./gradlew clean --stacktrace
-
-
-  # =========================
-  # بناء APK
-  # =========================
-  - name: Build Debug APK
-    working-directory: UgariticVision
-    run: ./gradlew assembleDebug --stacktrace --no-daemon
-
-
-  # =========================
-  # التأكد من إنشاء APK
-  # =========================
-  - name: Verify APK
-    working-directory: UgariticVision
-    run: |
-      echo "=== APK Files ==="
-      find app/build/outputs -type f -name "*.apk" -print
-
-      echo ""
-      echo "=== Debug APK Details ==="
-
-      ls -lh app/build/outputs/apk/debug/
-
-
-  # =========================
-  # حفظ APK كـ Artifact
-  # =========================
-  - name: Upload APK Artifact
-    uses: actions/upload-artifact@v4
-    with:
-      name: UgariticVision-debug-apk
-      path: UgariticVision/app/build/outputs/apk/debug/app-debug.apk
-      if-no-files-found: error
-
-
-  # =========================
-  # إنشاء GitHub Release
-  # =========================
-  - name: Create GitHub Release
-    uses: softprops/action-gh-release@v2
-    with:
-      tag_name: "v1.0.${{ github.run_number }}"
-      name: "UgariticVision v1.0.${{ github.run_number }}"
-      body: |
-        UgariticVision Android APK
-
-        Build Number: ${{ github.run_number }}
-        Commit: ${{ github.sha }}
-
-        APK جاهز للتثبيت على Android.
-
-      files: |
-        UgariticVision/app/build/outputs/apk/debug/app-debug.apk
-
-      draft: false
-      prerelease: false
-
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            APK جاهز للتثبيت على Android.
+          files: |
+            UgariticVision/app/build/outputs/apk/debug/app-debug.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
