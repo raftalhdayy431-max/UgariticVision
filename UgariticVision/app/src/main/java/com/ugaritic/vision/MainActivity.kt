@@ -28,12 +28,12 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var mainImageView: ImageView
     private lateinit var statusLabel: TextView
-    private lateinit var tfLiteEngine: TFLiteEngine
+    private var tfLiteEngine: TFLiteEngine? = null
     
     private lateinit var cameraExecutor: ExecutorService
     private var isLiveCamera = true
     private var frozenBitmap: Bitmap? = null
-    private var currentBitmap: Bitmap? = null // لحفظ آخر إطار قادم من الكاميرا
+    private var currentBitmap: Bitmap? = null
 
     // متغيرات الفلاتر
     private var showBoxes = true
@@ -56,9 +56,16 @@ class MainActivity : AppCompatActivity() {
         val chipConf = findViewById<CheckBox>(R.id.chipConf)
         val chipChars = findViewById<CheckBox>(R.id.chipChars)
 
-        // التهيئة
-        tfLiteEngine = TFLiteEngine(this)
         cameraExecutor = Executors.newSingleThreadExecutor()
+
+        // التهيئة الآمنة للموديل لمنع الخروج المفاجئ وإظهار السبب الحقيقي إن وجد
+        try {
+            tfLiteEngine = TFLiteEngine(this)
+        } catch (e: Exception) {
+            Toast.makeText(this, "خطأ في تهيئة الموديل: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            statusLabel.text = "فشل تحميل الموديل!"
+            statusLabel.setTextColor(Color.RED)
+        }
 
         // أحداث الفلاتر
         chipBoxes.setOnCheckedChangeListener { _, isChecked -> showBoxes = isChecked; reanalyzeFrozen() }
@@ -68,7 +75,6 @@ class MainActivity : AppCompatActivity() {
         // أحداث الأزرار
         btnAnalyze.setOnClickListener {
             isLiveCamera = false
-            // تجميد الإطار الحالي وتخزينه ليعمل مع الفلاتر وإعادة التحليل
             frozenBitmap = currentBitmap
             statusLabel.text = "ANALYZED FRAME"
             statusLabel.setTextColor(Color.parseColor("#FF9919"))
@@ -136,7 +142,7 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, imageAnalyzer)
             } catch (exc: Exception) {
-                // خطأ في تهيئة الكاميرا
+                // خطأ كاميرا صامت
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -178,40 +184,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processAndDisplayImage(bitmap: Bitmap?) {
-        if (bitmap == null) return
+        if (bitmap == null || tfLiteEngine == null) return
         
-        // حفظ الإطار الحالي للاستفادة منه عند الضغط على زر التحليل أو الفلاتر
         currentBitmap = bitmap
 
-        // 1. تشغيل نموذج TFLite والحصول على النتائج و LetterboxResult
-        val engineOutput = tfLiteEngine.run(bitmap)
+        try {
+            // 1. تشغيل نموذج TFLite والحصول على النتائج
+            val engineOutput = tfLiteEngine!!.run(bitmap)
 
-        // 2. فك التشفير واستخراج المربعات والحروف الأغاريتية
-        val rawDetections = YoloPostProcessor.decode(
-            data = engineOutput.data,
-            shape = engineOutput.shape,
-            conf = 0.4f,
-            iou = 0.5f,
-            maxDet = 100
-        )
+            // 2. فك التشفير واستخراج المربعات والحروف
+            val rawDetections = YoloPostProcessor.decode(
+                data = engineOutput.data,
+                shape = engineOutput.shape,
+                conf = 0.4f,
+                iou = 0.5f,
+                maxDet = 100
+            )
 
-        // 3. إعادة الإحداثيات لمقاس الصورة الأصلي بدقة مطابقة
-        val finalDetections = rawDetections.map { detection ->
-            Letterbox.undo(detection, engineOutput.letterboxResult)
-        }
-
-        // 4. استخراج النص الأغاريتي المرتب باستخدام UgariticTextExtractor
-        val extractedText = UgariticTextExtractor.extract(finalDetections)
-
-        // 5. رسم المربعات والرموز الأغاريتية على الصورة
-        val annotatedBitmap = drawDetectionsOnBitmap(bitmap, finalDetections)
-
-        runOnUiThread {
-            mainImageView.setImageBitmap(annotatedBitmap)
-            // تحديث النص المستخرج في شريط الحالة
-            if (extractedText.isNotBlank()) {
-                statusLabel.text = "النص: $extractedText"
+            // 3. إعادة الإحداثيات لمقاس الصورة الأصلي
+            val finalDetections = rawDetections.map { detection ->
+                Letterbox.undo(detection, engineOutput.letterboxResult)
             }
+
+            // 4. استخراج النص الأغاريتي
+            val extractedText = UgariticTextExtractor.extract(finalDetections)
+
+            // 5. رسم المربعات والرموز
+            val annotatedBitmap = drawDetectionsOnBitmap(bitmap, finalDetections)
+
+            runOnUiThread {
+                mainImageView.setImageBitmap(annotatedBitmap)
+                if (extractedText.isNotBlank()) {
+                    statusLabel.text = "النص: $extractedText"
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -266,6 +274,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
-        tfLiteEngine.close()
+        tfLiteEngine?.close()
     }
 }
